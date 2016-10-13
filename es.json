@@ -1,0 +1,14 @@
+{
+  "query": {
+    "bool": {
+      "must": [
+        { "match": { "logger_name": "org.apache.cassandra.io.sstable.format.big.BigTableWriter" } },
+        { "match": { "cluster": "eqiad" } },
+        { "match_phrase": { "message": "Writing large partition" } }
+      ]
+    }
+  },
+  "_source": [ "message" ],
+  "size": 20,
+  "from": 0
+}
