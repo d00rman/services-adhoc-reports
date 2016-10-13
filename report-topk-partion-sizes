@@ -8,9 +8,10 @@
 
 import argparse
 import datetime
-import jsonschema
 import operator
 import re
+
+import jsonschema
 import requests
 
 
@@ -30,24 +31,22 @@ class Logstash(object):
             raise RuntimeError("invalid argument; query must be a dictionary")
         query["from"] = 0
         query["size"] = Logstash.page_size
-        res = Results(requests.get(self.__url(), json=query))
+        res = Page(requests.get(self.__url(), json=query))
         for hit in res.hits:
             yield hit
         for _ in range((res.total / Logstash.page_size) + 1):
             query["from"] += len(res.hits)
-            res = Results(requests.get(self.__url(), json=query))
+            res = Page(requests.get(self.__url(), json=query))
             for hit in res.hits:
                 yield hit
 
-# TODO: Do JSON schema validation
-# TODO: Read-only properties?
-# XXX: Rename to Page, LogstashPage?
-class Results(object):
+
+class Page(object):
     response_schema = {
         "type": "object",
         "properties": {
             "timed_out": {
-                "type": "boolean"   # ???
+                "type": "boolean"
             },
             "hits": {
                 "type": "object",
@@ -55,30 +54,35 @@ class Results(object):
                     "hits": {
                         "type": "array"
                     }
-                }
+                },
+                "required": ["hits"]
             }
         },
         "required": ["timed_out", "hits"]
     }
-    
+
     def __init__(self, response):
-        assert response.status_code == 200
-        Results.validate_response(response)
+        json = Page.validate_response(response)
+        self._total = json["hits"]["total"]
+        self._hits = json["hits"]["hits"]
 
-        json_response = response.json()
-        assert json_response.has_key("timed_out")
-        assert not json_response["timed_out"]
-        assert json_response.has_key("hits")
-        assert json_response["hits"].has_key("total")
-        assert json_response["hits"].has_key("hits")
-        assert isinstance(json_response["hits"]["hits"], list)
+    @property
+    def total(self):
+        return self._total
 
-        self.total = json_response["hits"]["total"]
-        self.hits = json_response["hits"]["hits"]
+    @property
+    def hits(self):
+        return self._hits
 
     @classmethod
     def validate_response(cls, response):
-        jsonschema.validate(response.json(), Results.response_schema)
+        if not hasattr(response, "status_code"):
+            raise Exception("invalid response object")
+        if response.status_code != 200:
+            raise Exception("elasticsearch returned status {0.status_code}".format(response))
+        json = response.json()
+        jsonschema.validate(json, Page.response_schema)
+        return json
 
 
 def search_query(cluster="eqiad"):
