@@ -11,6 +11,7 @@ import datetime
 import operator
 import re
 
+import json
 import jsonschema
 import requests
 
@@ -31,12 +32,12 @@ class Logstash(object):
             raise RuntimeError("invalid argument; query must be a dictionary")
         query["from"] = 0
         query["size"] = Logstash.page_size
-        res = Page(requests.get(self.__url(), json=query))
+        res = Page(requests.get(self.__url(), data=json.dumps(query)))
         for hit in res.hits:
             yield hit
         for _ in range((res.total / Logstash.page_size) + 1):
             query["from"] += len(res.hits)
-            res = Page(requests.get(self.__url(), json=query))
+            res = Page(requests.get(self.__url(), data=json.dumps(query)))
             for hit in res.hits:
                 yield hit
 
@@ -132,9 +133,10 @@ def main():
     port = args.logstash_port
     k = args.top
     count = 0
+    results = {}
     log = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
     for index in index_names():
-        results = {}
+	print "Working index:", index
         for hit in Logstash(index, host, port).search(search_query()):
             count += 1
             message = hit["_source"]["message"]
@@ -145,11 +147,11 @@ def main():
             size = match.group("bytes")
             if results.get(partition, 0) < size:
                 results[partition] = int(size)
-        values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
-        print "Processed {} log entries.".format(count)
-        print "{} unique partitions.".format(len(values))
-        for i in range(k):
-            print u"{}: {}".format(strfsize(values[i][1]), values[i][0])
+    values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
+    print "Processed {} log entries.".format(count)
+    print "{} unique partitions.".format(len(values))
+    for i in range(k):
+        print u"{}: {}".format(strfsize(values[i][1]), values[i][0])
 
 
 if __name__ == "__main__":
