@@ -1,0 +1,174 @@
+{
+  "took" : 287,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : 1201,
+    "max_score" : 31.51682,
+    "hits" : [ {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBNN7a2B4w3SKhOiKj",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:Commons\\:Segnalazioni_per_la_vetrina (263211626 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBN-xP2B4w3SKhOj6Z",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_parsoid_dataW4ULtxs1oMqJ/data:en.wikipedia.org:User\\:DeltaQuad/UAA/Wait (106308114 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBOAJV2B4w3SKhOj9L",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_default_T_parsoid_html/data:www.wikidata.org:User\\:Pasleim/Items_for_deletion/Page_deleted (109262018 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBOmwD2B4w3SKhOlSm",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_parsoid_dataW4ULtxs1oMqJ/data:en.wikipedia.org:User\\:B-bot/Event_log (155767232 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBPCUw2B4w3SKhOmNu",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:Commons\\:Featured_picture_candidates/Log/April_2016 (690477127 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBIzhI2B4w3SKhOYA9",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_parsoid_html/data:en.wikipedia.org:2016_in_sports (209827571 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBHKbf2B4w3SKhOTf9",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_parsoid_html/data:en.wikipedia.org:List_of_law_clerks_of_the_Supreme_Court_of_the_United_States (110677631 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBHJ342B4w3SKhOTeT",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:User\\:Johann_Jaritz/Quality_images (117020946 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBJqp_2B4w3SKhOaD1",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_mobileapps_remaining/data:en.wikipedia.org:2016_in_sports (133589318 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBI8LI2B4w3SKhOYSZ",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:User\\:Alberto-g-rovi (395121570 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBJNXu2B4w3SKhOY8G",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_parsoid_html/data:en.wikipedia.org:User\\:DeltaQuad/UAA/Wait (146286017 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBIoyx2B4w3SKhOXhR",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:User\\:Josve05a/aviation (152492887 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBJ9o22B4w3SKhOaqF",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:User\\:S._Bollmann/gallery (195493520 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBLWzh2B4w3SKhOd4f",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_mobileapps_remaining/data:en.wikipedia.org:User\\:B-bot/Event_log (166391989 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBK3EI2B4w3SKhOc4Q",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:User\\:Butko/gallery/19.08.2015 (123514413 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBLuRQ2B4w3SKhOetx",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:Commons\\:Quality_images_candidates (105572821 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBK5hk2B4w3SKhOc8s",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:meta.wikimedia.org:User\\:COIBot/LinkReports (135986023 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBLA022B4w3SKhOdMM",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_mobileapps_remaining/data:en.wikipedia.org:User\\:B-bot/Event_log (217626318 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBL3BD2B4w3SKhOe9v",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikimedia_T_parsoid_html/data:commons.wikimedia.org:Commons\\:Undeletion_requests/Current_requests (267558804 bytes)"
+      }
+    }, {
+      "_index" : "logstash-2016.09.19",
+      "_type" : "cassandra",
+      "_id" : "AVdBNDKZ2B4w3SKhOhrb",
+      "_score" : 31.51682,
+      "_source" : {
+        "message" : "Writing large partition local_group_wikipedia_T_parsoid_html/data:en.wikipedia.org:User\\:B-bot/Event_log (361972536 bytes)"
+      }
+    } ]
+  }
+}
