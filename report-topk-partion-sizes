@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 
+# TODO: pylint (120 char line limit) 
+# TODO: validate presence of jsonschema and requests modules?
+# TODO: make it email a report
+# TODO: Comments, docstrings
+# TODO: Licensing
 
+import argparse
 import datetime
+import jsonschema
 import operator
 import re
 import requests
 
 
-# XXX: Logstash? LogstashSearch?
-class Search(object):
+class Logstash(object):
     page_size = 200
 
     def __init__(self, index, host, port=9200):
@@ -17,28 +23,48 @@ class Search(object):
         self.port = port
 
     def __url(self):
-        return "http://{}:{}/{}/_search".format(self.host, self.port, self.index)
+        return "http://{0.host}:{0.port}/{0.index}/_search".format(self)
 
     def search(self, query):
         if not isinstance(query, dict):
             raise RuntimeError("invalid argument; query must be a dictionary")
         query["from"] = 0
-        query["size"] = Search.page_size
+        query["size"] = Logstash.page_size
         res = Results(requests.get(self.__url(), json=query))
         for hit in res.hits:
             yield hit
-        for _ in range((res.total / Search.page_size) + 1):
+        for _ in range((res.total / Logstash.page_size) + 1):
             query["from"] += len(res.hits)
             res = Results(requests.get(self.__url(), json=query))
             for hit in res.hits:
                 yield hit
 
-# TODO: Add proper error handling
+# TODO: Do JSON schema validation
 # TODO: Read-only properties?
-# XXX: Page? LogstashPage?
+# XXX: Rename to Page, LogstashPage?
 class Results(object):
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "timed_out": {
+                "type": "boolean"   # ???
+            },
+            "hits": {
+                "type": "object",
+                "properties": {
+                    "hits": {
+                        "type": "array"
+                    }
+                }
+            }
+        },
+        "required": ["timed_out", "hits"]
+    }
+    
     def __init__(self, response):
         assert response.status_code == 200
+        Results.validate_response(response)
+
         json_response = response.json()
         assert json_response.has_key("timed_out")
         assert not json_response["timed_out"]
@@ -50,9 +76,12 @@ class Results(object):
         self.total = json_response["hits"]["total"]
         self.hits = json_response["hits"]["hits"]
 
+    @classmethod
+    def validate_response(cls, response):
+        jsonschema.validate(response.json(), Results.response_schema)
 
-# XXX: search_query
-def search_request(cluster="eqiad"):
+
+def search_query(cluster="eqiad"):
     return {
         "query": {
             "bool": {
@@ -66,14 +95,12 @@ def search_request(cluster="eqiad"):
         "_source": ["message"]
     }
 
-# XXX: yield instead of list?
 def index_names(days=7):
     name = lambda dt: dt.strftime("logstash-%Y.%m.%d")
     now = datetime.datetime.now()
-    names = [name(now)]
+    yield name(now)
     for i in range(days):
-        names.append(name(now - datetime.timedelta(days=i+1)))
-    return names
+        yield name(now - datetime.timedelta(days=i+1))
 
 def strfsize(num, suffix='B'):
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
@@ -82,26 +109,34 @@ def strfsize(num, suffix='B'):
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
-# TODO: argument parsing for host, port, k, (email address?)
-# TODO: make it email a report
-# TODO: Pretty formatting of sizes
-
 def parse_arguments():
-    pass
+    parser = argparse.ArgumentParser(
+        description="Generate an email report of the widest Cassandra partitions.")
+    parser.add_argument(
+        "-e", "--email", metavar="ADDRESS", required=True, help="Email address to send report to")
+    parser.add_argument(
+        "-H", "--logstash-host", metavar="HOST", default="logstash1001.eqiad.wmnet", help="Logstash hostname or address to search")
+    parser.add_argument(
+        "-p", "--logstash-port", metavar="PORT", type=int, default=9200, help="Logstash port number")
+    parser.add_argument(
+        "-k", "--top", metavar="N", type=int, default=50, help="Number of results to report")
+    return parser.parse_args()
 
 def main():
-    import sys; host = sys.argv[1]
-    k = 10
+    args = parse_arguments()
+    host = args.logstash_host
+    port = args.logstash_port
+    k = args.top
     count = 0
     log = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
     for index in index_names():
         results = {}
-        for hit in Search(index, host).search(search_request()):
+        for hit in Logstash(index, host, port).search(search_query()):
             count += 1
             message = hit["_source"]["message"]
             match = log.match(message)
             if not match:
-                continue   # XXX: Warn or something?
+                continue   # XXX: Maybe warn or something; This shouldn't happen
             partition = match.group("partition")
             size = match.group("bytes")
             if results.get(partition, 0) < size:
@@ -111,9 +146,7 @@ def main():
         print "{} unique partitions.".format(len(values))
         for i in range(k):
             print u"{}: {}".format(strfsize(values[i][1]), values[i][0])
-        #print values[:k]
-        #print values[-1:]
-        break
+
 
 if __name__ == "__main__":
     main()
