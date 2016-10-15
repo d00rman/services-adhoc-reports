@@ -1,7 +1,26 @@
 #!/usr/bin/env python
 
-# TODO: Comments, docstrings
-# TODO: Licensing
+# -*- coding: utf-8 -*-
+
+# Copyright 2016 Eric Evans <eevans@wikimedia.org>, Wikimedia Foundation
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
+Cassandra topk wide partition reports
+"""
+
 
 import argparse
 import csv
@@ -39,7 +58,8 @@ except ImportError:
     sys.exit(1)
 
 
-class Logstash(object):
+class ElasticSearch(object):
+    """Query elasticsearch."""
     page_size = 200
 
     def __init__(self, host, port=9200):
@@ -50,14 +70,18 @@ class Logstash(object):
         return "http://{0.host}:{0.port}/{index}/_search".format(self, index=index)
 
     def search(self, index, query):
+        """
+        Executes an elasticsearch query of the given index; Returns a generator
+        of objects from the hits array of the response.
+        """
         if not isinstance(query, dict):
             raise RuntimeError("invalid argument; query must be a dictionary")
         query["from"] = 0
-        query["size"] = Logstash.page_size
+        query["size"] = ElasticSearch.page_size
         res = Page(requests.get(self.__url(index), data=json.dumps(query)))
         for hit in res.hits:
             yield hit
-        for _ in range((res.total / Logstash.page_size) + 1):
+        for _ in range((res.total / ElasticSearch.page_size) + 1):
             query["from"] += len(res.hits)
             res = Page(requests.get(self.__url(index), data=json.dumps(query)))
             for hit in res.hits:
@@ -294,7 +318,7 @@ def main():
     count = 0
     results = {}
     log = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
-    logstash = Logstash(args.logstash_host, args.logstash_port)
+    logstash = ElasticSearch(args.logstash_host, args.logstash_port)
     for index in index_names(args.last_days):
         print "Querying elasticsearch index:", index
         for hit in logstash.search(index, search_query(args.cluster)):
@@ -329,6 +353,7 @@ def main():
     email.send()
 
     print "Done."
+
 
 if __name__ == "__main__":
     main()
