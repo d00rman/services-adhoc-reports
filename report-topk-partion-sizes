@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-# TODO: pylint (120 char line limit) 
-# TODO: validate presence of jsonschema and requests modules?
-# TODO: make it email a report
 # TODO: Comments, docstrings
 # TODO: Licensing
 
@@ -45,28 +42,26 @@ except ImportError:
 class Logstash(object):
     page_size = 200
 
-    def __init__(self, index, host, port=9200):
-        self.index = index
+    def __init__(self, host, port=9200):
         self.host = host
         self.port = port
 
-    def __url(self):
-        return "http://{0.host}:{0.port}/{0.index}/_search".format(self)
+    def __url(self, index):
+        return "http://{0.host}:{0.port}/{index}/_search".format(self, index=index)
 
-    def search(self, query):
+    def search(self, index, query):
         if not isinstance(query, dict):
             raise RuntimeError("invalid argument; query must be a dictionary")
         query["from"] = 0
         query["size"] = Logstash.page_size
-        res = Page(requests.get(self.__url(), data=json.dumps(query)))
+        res = Page(requests.get(self.__url(index), data=json.dumps(query)))
         for hit in res.hits:
             yield hit
         for _ in range((res.total / Logstash.page_size) + 1):
             query["from"] += len(res.hits)
-            res = Page(requests.get(self.__url(), data=json.dumps(query)))
+            res = Page(requests.get(self.__url(index), data=json.dumps(query)))
             for hit in res.hits:
                 yield hit
-
 
 class Page(object):
     response_schema = {
@@ -89,9 +84,9 @@ class Page(object):
     }
 
     def __init__(self, response):
-        json = Page.validate_response(response)
-        self._total = json["hits"]["total"]
-        self._hits = json["hits"]["hits"]
+        json_obj = Page.validate_response(response)
+        self._total = json_obj["hits"]["total"]
+        self._hits = json_obj["hits"]["hits"]
 
     @property
     def total(self):
@@ -107,10 +102,9 @@ class Page(object):
             raise Exception("invalid response object")
         if response.status_code != 200:
             raise Exception("elasticsearch returned status {0.status_code}".format(response))
-        json = response.json()
-        jsonschema.validate(json, Page.response_schema)
-        return json
-
+        json_obj = response.json()
+        jsonschema.validate(json_obj, Page.response_schema)
+        return json_obj
 
 def search_query(cluster="eqiad"):
     return {
@@ -267,14 +261,17 @@ def strfsize(num, suffix='B'):
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Generate an email report of the widest Cassandra partitions.")
+    parser.add_argument("-e", "--email", metavar="ADDRESS", required=True, help="Email address to send report to")
     parser.add_argument(
-        "-e", "--email", metavar="ADDRESS", required=True, help="Email address to send report to")
+        "-H", "--logstash-host",
+        metavar="HOST",
+        default="logstash1001.eqiad.wmnet",
+        help="Logstash hostname or address to search")
+    parser.add_argument("-p", "--logstash-port", metavar="PORT", type=int, default=9200, help="Logstash port number")
+    parser.add_argument("-k", "--top", metavar="N", type=int, default=50, help="Number of results to report")
+    parser.add_argument("-c", "--cluster", metavar="NAME", default="eqiad", help="Cassandra cluster name")
     parser.add_argument(
-        "-H", "--logstash-host", metavar="HOST", default="logstash1001.eqiad.wmnet", help="Logstash hostname or address to search")
-    parser.add_argument(
-        "-p", "--logstash-port", metavar="PORT", type=int, default=9200, help="Logstash port number")
-    parser.add_argument(
-        "-k", "--top", metavar="N", type=int, default=50, help="Number of results to report")
+        "-d", "--last-days", metavar="DAYS", default=7, type=int, help="Past number of days to report on")
     return parser.parse_args()
 
 def main():
@@ -283,14 +280,16 @@ def main():
     count = 0
     results = {}
     log = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
-    for index in index_names():
-	print "Working index:", index
-        for hit in Logstash(index, host, port).search(search_query()):
+    logstash = Logstash(args.logstash_host, args.logstash_port)
+    for index in index_names(args.last_days):
+        print "Querying elasticsearch index:", index
+        for hit in logstash.search(index, search_query(args.cluster)):
             count += 1
             message = hit["_source"]["message"]
             match = log.match(message)
             if not match:
-                continue   # XXX: Maybe warn or something; This shouldn't happen
+                print "Warning: result did not match regex (\"{}\")".format(message)
+                continue
             partition = match.group("partition")
             size = match.group("bytes")
             if results.get(partition, 0) < size:
