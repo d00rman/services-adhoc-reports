@@ -7,13 +7,39 @@
 # TODO: Licensing
 
 import argparse
+import csv
 import datetime
+import getpass
+import json
 import operator
 import re
+import StringIO
+import socket
+import sys
+import time
 
-import json
-import jsonschema
-import requests
+from email.mime.text      import MIMEText
+from email.mime.base      import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from subprocess           import Popen, PIPE
+
+try:
+    import jsonschema
+except ImportError:
+    print >>sys.stderr, "Missing jsonschema module (Hint: apt-get install python-jsonschema)"
+    sys.exit(1)
+
+try:
+    import requests
+except ImportError:
+    print >>sys.stderr, "Missing requests module (Hint: apt-get install python-requests)"
+    sys.exit(1)
+
+try:
+    from jinja2 import Template
+except ImportError:
+    print >>sys.stderr, "Missing jinja2 module (Hint: apt-get install python-jinja2)"
+    sys.exit(1)
 
 
 class Logstash(object):
@@ -107,6 +133,130 @@ def index_names(days=7):
     for i in range(days):
         yield name(now - datetime.timedelta(days=i+1))
 
+class EmailMessage(object):
+    text = """
+    <html>
+      <body>
+        <p>
+          Respected Humans,
+        </p>
+        <p>
+          Attached is a report of the top {{results|length}} widest partitions for the Cassandra cluster named
+          <i>{{cluster_name}}</i>.
+        </p>
+
+        <table>
+          <tr>
+            <th>Size</th>
+            <th>Partition</th>
+          <tr>
+        {% for result in results %}
+          <tr>
+            <td>{{result[1]}}</td>
+            <td>{{result[0]}}</td>
+          </tr>
+        {% endfor %}
+        </table>
+
+        <h2>About this report:</h2>
+        <p>
+          Cassandra logs a warning whenever background compaction encounters a parition larger than the value of
+          <a href="http://cassandra.apache.org/doc/latest/configuration/cassandra_config_file.html#compaction-large-partition-warning-threshold-mb">
+            <code>compaction_large_partition_warning_threshold_mb</code>
+          </a>.
+          This report is periodically generated from an Elasticsearch query of these log messages, and emailed to
+          {{email_address}}.
+        </p>
+
+        <table>
+          <tr>
+            <td>Execution host:</td>
+            <td>{{execution_host}}</td>
+          </tr>
+          <tr>
+            <td>Logstash host:</td>
+            <td>{{logstash_host}}</td>
+          </tr>
+          <tr>
+            <td>Execution time:</td>
+            <td>{{execution_time}} secs</td>
+          </tr>
+          <tr>
+            <td>Query results:</td>
+            <td>{{total_query_results}}</td>
+          </tr>
+          <tr>
+            <td>Unique partitions:</td>
+            <td>{{unique_query_results}}</td>
+          </tr>
+          <tr>
+            <td>Cassandra cluster name:</td>
+            <td>{{cluster_name}}</td>
+          </tr>
+          <tr>
+            <td>Source code:</td>
+            <td>https://github.com/eevans/services-adhoc-reports</td>
+          </tr>
+        </table>
+      </body>
+    </html>
+    """
+
+    def __init__(self, **kwargs):
+        def __check_required_kwarg(kwarg, default=None):
+            value = kwargs.get(kwarg, default)
+            if not value:
+                raise Exception("missing keyword argument: {}".format(kwarg))
+            return value
+
+        self.message = MIMEMultipart("alternative")
+        self.message["Subject"] = __check_required_kwarg("subject")
+        self.message["To"] = __check_required_kwarg("email_address")
+        self.message["From"] = __check_required_kwarg("message_from")
+
+        template_vars = {}
+        template_vars["cluster_name"] = __check_required_kwarg("cluster_name")
+        template_vars["logstash_host"] = __check_required_kwarg("logstash_host")
+        template_vars["email_address"] = self.message["To"]
+        template_vars["results"] = __check_required_kwarg("results")
+        template_vars["execution_host"] = __check_required_kwarg("execution_host")
+        template_vars["execution_time"] = __check_required_kwarg("execution_time")
+        template_vars["total_query_results"] = __check_required_kwarg("total_query_results")
+        template_vars["unique_query_results"] = __check_required_kwarg("unique_query_results")
+
+        if not isinstance(template_vars["results"], list):
+            raise Exception("invalid argument for keyword results (not a list)")
+
+        self.template = Template(EmailMessage.text)
+        self.message.attach(MIMEText(self.template.render(template_vars).encode("utf-8"), "html"))
+
+    def send(self):
+        proc = Popen(["exim4", "-i", self.message["To"]], stdout=PIPE, stdin=PIPE, stderr=PIPE)
+        proc.communicate(input=self.message.as_string())
+
+    def attach(self, message):
+        if not isinstance(message, MIMEBase):
+            raise Exception("invalid message")
+        self.message.attach(message)
+
+def csv_attachement(results):
+    csv_fp = StringIO.StringIO()
+    csv_writer = csv.writer(csv_fp)
+    for res in results:
+        csv_writer.writerow([res[0].encode("utf-8"), res[1]])
+    csv_msg = MIMEText(csv_fp.getvalue(), "csv")
+    csv_msg.add_header("Content-Disposition", "attachment", filename="report.csv")
+    return csv_msg
+
+def local_hostname():
+    return socket.gethostbyaddr(socket.gethostname())[0]
+
+def subject(days):
+    now = datetime.datetime.now()
+    date_to = now.strftime("%Y-%m-%d")
+    date_from = (now - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+    return "Cassandra wide partition report: {} - {}".format(date_from, date_to)
+
 def strfsize(num, suffix='B'):
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
@@ -128,10 +278,8 @@ def parse_arguments():
     return parser.parse_args()
 
 def main():
+    exec_start_time = time.time()
     args = parse_arguments()
-    host = args.logstash_host
-    port = args.logstash_port
-    k = args.top
     count = 0
     results = {}
     log = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
@@ -148,11 +296,26 @@ def main():
             if results.get(partition, 0) < size:
                 results[partition] = int(size)
     values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
-    print "Processed {} log entries.".format(count)
-    print "{} unique partitions.".format(len(values))
-    for i in range(k):
-        print u"{}: {}".format(strfsize(values[i][1]), values[i][0])
 
+    print "Sending email report..."
+
+    email = EmailMessage(
+        results=[(i[0], strfsize(i[1])) for i in values[:args.tops]],
+        subject=subject(args.last_days),
+        email_address=args.email,
+        message_from="{}@{}".format(getpass.getuser(), local_hostname()),
+        cluster_name=args.cluster,
+        logstash_host=args.logstash_host,
+        execution_host=local_hostname(),
+        execution_time=time.time()-exec_start_time,
+        total_query_results=count,
+        unique_query_results=len(values)
+    )
+
+    email.attach(csv_attachement(values[:args.top]))
+    email.send()
+
+    print "Done."
 
 if __name__ == "__main__":
     main()
