@@ -299,7 +299,7 @@ def main():
     print "Sending email report..."
 
     email = EmailMessage(
-        results=[(i[0], strfsize(i[1])) for i in values[:args.tops]],
+        results=[(i[0], strfsize(i[1])) for i in values[:args.top]],
         subject=subject(args.last_days),
         email_address=args.email,
         message_from="{}@{}".format(getpass.getuser(), local_hostname()),
