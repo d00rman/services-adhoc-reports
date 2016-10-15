@@ -130,6 +130,20 @@ def index_names(days=7):
 class EmailMessage(object):
     text = """
     <html>
+      <head>
+        <style>
+          th, td {
+            text-align: left;
+            padding: 0 1em 0 1em;
+          }
+          table {
+            border-collapse: collapse;
+          }
+          table, th, td {
+            border: 1px solid black;
+          }
+        </style>
+      </head>
       <body>
         <p>
           Respected Humans,
@@ -164,31 +178,31 @@ class EmailMessage(object):
 
         <table>
           <tr>
-            <td>Execution host:</td>
+            <th>Execution host</th>
             <td>{{execution_host}}</td>
           </tr>
           <tr>
-            <td>Logstash host:</td>
+            <th>Logstash host</th>
             <td>{{logstash_host}}</td>
           </tr>
           <tr>
-            <td>Execution time:</td>
+            <th>Execution time</th>
             <td>{{execution_time}} secs</td>
           </tr>
           <tr>
-            <td>Query results:</td>
+            <th>Query results</th>
             <td>{{total_query_results}}</td>
           </tr>
           <tr>
-            <td>Unique partitions:</td>
+            <th>Unique partitions</th>
             <td>{{unique_query_results}}</td>
           </tr>
           <tr>
-            <td>Cassandra cluster name:</td>
+            <th>Cassandra cluster name</th>
             <td>{{cluster_name}}</td>
           </tr>
           <tr>
-            <td>Source code:</td>
+            <th>Source code</th>
             <td>https://github.com/eevans/services-adhoc-reports</td>
           </tr>
         </table>
@@ -249,7 +263,7 @@ def subject(days):
     now = datetime.datetime.now()
     date_to = now.strftime("%Y-%m-%d")
     date_from = (now - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
-    return "Cassandra wide partition report: {} - {}".format(date_from, date_to)
+    return "Cassandra wide partition report: period of {} to {}".format(date_from, date_to)
 
 def strfsize(num, suffix='B'):
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
