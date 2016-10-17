@@ -189,6 +189,10 @@ class EmailMessage(object):
           table, th, td {
             border: 1px solid black;
           }
+          p.notice {
+            color: #777;
+            font-size: 90%;
+          }
         </style>
       </head>
       <body>
@@ -253,6 +257,16 @@ class EmailMessage(object):
             <td>https://github.com/eevans/services-adhoc-reports</td>
           </tr>
         </table>
+
+        <p class="notice">
+          <i>
+            Note: This (beta) report is currently being generated from an adhoc Git checkout in a user
+            home directory, and is executed by a manually configured cron job.  If accepted, this software
+            should be properly documented, deployed, and Puppetized (see
+            <a href="https://phabricator.wikimedia.org/T147366">Setup automated topk wide row reporting</a>
+            for more information).
+          </i>
+        </p>
       </body>
     </html>
     """
