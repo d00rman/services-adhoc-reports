@@ -88,6 +88,9 @@ class ElasticSearch(object):
                 yield hit
 
 class Page(object):
+    """
+    Encapsulates a page of data as returned from elasticsearch.
+    """
     response_schema = {
         "type": "object",
         "properties": {
@@ -114,14 +117,24 @@ class Page(object):
 
     @property
     def total(self):
+        """
+        Total number of results returned by query.
+        """
         return self._total
 
     @property
     def hits(self):
+        """
+        Number of results in this page.
+        """
         return self._hits
 
     @classmethod
     def validate_response(cls, response):
+        """
+        Validates the return status and JSON payload of a response returned by
+        the requests module.
+        """
         if not hasattr(response, "status_code"):
             raise Exception("invalid response object")
         if response.status_code != 200:
@@ -131,6 +144,10 @@ class Page(object):
         return json_obj
 
 def search_query(cluster="eqiad"):
+    """
+    Returns the JSON-based elasticsearch query for Cassandra large partition
+    warnings.
+    """
     return {
         "query": {
             "bool": {
@@ -145,6 +162,9 @@ def search_query(cluster="eqiad"):
     }
 
 def index_names(days=7):
+    """
+    Returns a generator of logstash index names for the past N days.
+    """
     name = lambda dt: dt.strftime("logstash-%Y.%m.%d")
     now = datetime.datetime.now()
     yield name(now)
@@ -152,6 +172,9 @@ def index_names(days=7):
         yield name(now - datetime.timedelta(days=i+1))
 
 class EmailMessage(object):
+    """
+    An email report of the topk wide partition results.
+    """
     text = """
     <html>
       <head>
@@ -263,15 +286,24 @@ class EmailMessage(object):
         self.message.attach(MIMEText(self.template.render(template_vars).encode("utf-8"), "html"))
 
     def send(self):
+        """
+        Deliver this report.
+        """
         proc = Popen(["exim4", "-i", self.message["To"]], stdout=PIPE, stdin=PIPE, stderr=PIPE)
         proc.communicate(input=self.message.as_string())
 
     def attach(self, message):
+        """
+        Add an attachment to this report.
+        """
         if not isinstance(message, MIMEBase):
             raise Exception("invalid message")
         self.message.attach(message)
 
 def csv_attachement(results):
+    """
+    Return an email attachment of a csv file containing results.
+    """
     csv_fp = StringIO.StringIO()
     csv_writer = csv.writer(csv_fp)
     for res in results:
@@ -281,15 +313,24 @@ def csv_attachement(results):
     return csv_msg
 
 def local_hostname():
+    """
+    Returns the fully-qualified hostname of this current machine.
+    """
     return socket.gethostbyaddr(socket.gethostname())[0]
 
 def subject(days):
+    """
+    Returns a formated email subject line.
+    """
     now = datetime.datetime.now()
     date_to = now.strftime("%Y-%m-%d")
     date_from = (now - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
     return "Cassandra wide partition report: period of {} to {}".format(date_from, date_to)
 
 def strfsize(num, suffix='B'):
+    """
+    Formats a size as a human-readable string.
+    """
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
             return "%.1f%s%s" % (num, unit, suffix)
@@ -297,6 +338,9 @@ def strfsize(num, suffix='B'):
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
 def parse_arguments():
+    """
+    Parse command-line arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Generate an email report of the widest Cassandra partitions.")
     parser.add_argument("-e", "--email", metavar="ADDRESS", required=True, help="Email address to send report to")
@@ -313,18 +357,26 @@ def parse_arguments():
     return parser.parse_args()
 
 def main():
+    """
+    Queries elasticsearch for matching records from all applicable daily indices.
+    Generates an email report of the topk matching results and delivers it to
+    the requested email address.
+    """
     exec_start_time = time.time()
     args = parse_arguments()
     count = 0
     results = {}
-    log = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
+    log_message_re = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
     logstash = ElasticSearch(args.logstash_host, args.logstash_port)
+
+    # Query each daily logstash index, for the last N days.
     for index in index_names(args.last_days):
         print "Querying elasticsearch index:", index
+        # Collate the returned results.
         for hit in logstash.search(index, search_query(args.cluster)):
             count += 1
             message = hit["_source"]["message"]
-            match = log.match(message)
+            match = log_message_re.match(message)
             if not match:
                 print "Warning: result did not match regex (\"{}\")".format(message)
                 continue
@@ -332,10 +384,12 @@ def main():
             size = match.group("bytes")
             if results.get(partition, 0) < size:
                 results[partition] = int(size)
+    # Sort results by partition size, descending.
     values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
 
     print "Sending email report..."
 
+    # Craft an html email message report.
     email = EmailMessage(
         results=[(i[0], strfsize(i[1])) for i in values[:args.top]],
         subject=subject(args.last_days),
@@ -349,8 +403,8 @@ def main():
         unique_query_results=len(values)
     )
 
-    email.attach(csv_attachement(values[:args.top]))
-    email.send()
+    email.attach(csv_attachement(values[:args.top]))    # Attach a csv file.
+    email.send()                                        # Deliver.
 
     print "Done."
 
