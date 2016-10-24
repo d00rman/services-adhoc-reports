@@ -138,7 +138,7 @@ class Page(object):
         if not hasattr(response, "status_code"):
             raise Exception("invalid response object")
         if response.status_code != 200:
-            raise Exception("elasticsearch returned status {0.status_code}".format(response))
+            raise Exception("elasticsearch returned {0.status_code}: {0.reason}".format(response))
         json_obj = response.json()
         jsonschema.validate(json_obj, Page.response_schema)
         return json_obj
@@ -386,18 +386,21 @@ def main():
     # Query each daily logstash index, for the last N days.
     for index in index_names(args.last_days):
         print "Querying elasticsearch index:", index
-        # Collate the returned results.
-        for hit in logstash.search(index, search_query(args.cluster)):
-            count += 1
-            message = hit["_source"]["message"]
-            match = log_message_re.match(message)
-            if not match:
-                print "Warning: result did not match regex (\"{}\")".format(message)
-                continue
-            partition = match.group("partition")
-            size = match.group("bytes")
-            if results.get(partition, 0) < size:
-                results[partition] = int(size)
+        try:
+            # Collate the returned results.
+            for hit in logstash.search(index, search_query(args.cluster)):
+                count += 1
+                message = hit["_source"]["message"]
+                match = log_message_re.match(message)
+                if not match:
+                    print "Warning: result did not match regex (\"{}\")".format(message)
+                    continue
+                partition = match.group("partition")
+                size = match.group("bytes")
+                if results.get(partition, 0) < size:
+                    results[partition] = int(size)
+        except Exception, err:
+            print >>sys.stderr, "Query of {} failed: {}".format(index, err)
     # Sort results by partition size, descending.
     values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
 
