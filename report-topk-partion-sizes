@@ -138,7 +138,7 @@ class Page(object):
         if not hasattr(response, "status_code"):
             raise Exception("invalid response object")
         if response.status_code != 200:
-            raise Exception("elasticsearch returned {0.status_code}: {0.reason}".format(response))
+            raise Exception("elasticsearch returned status {0.status_code}: {1}".format(response, response.json()))
         json_obj = response.json()
         jsonschema.validate(json_obj, Page.response_schema)
         return json_obj
@@ -399,8 +399,12 @@ def main():
                 size = match.group("bytes")
                 if results.get(partition, 0) < size:
                     results[partition] = int(size)
+        # TODO: An exception is thrown when we page past `index.max_result_window` number of results
+        # (an elasticsearch setting; 10000 in our environment).  The solution seems to be to use the
+        # scroll API instead (https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-scroll.html).
         except Exception, err:
-            print >>sys.stderr, "Query of {} failed: {}".format(index, err)
+            print >>sys.stderr, "Query of index {} failed: {}".format(index, err)
+
     # Sort results by partition size, descending.
     values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
 
