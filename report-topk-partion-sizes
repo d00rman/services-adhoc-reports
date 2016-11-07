@@ -303,7 +303,7 @@ class EmailMessage(object):
         """
         Deliver this report.
         """
-        proc = Popen(["exim4", "-i", self.message["To"]], stdout=PIPE, stdin=PIPE, stderr=PIPE)
+        proc = Popen(["/usr/sbin/exim4", "-i", self.message["To"]], stdout=PIPE, stdin=PIPE, stderr=PIPE)
         proc.communicate(input=self.message.as_string())
 
     def attach(self, message):
