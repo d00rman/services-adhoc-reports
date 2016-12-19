@@ -257,16 +257,6 @@ class EmailMessage(object):
             <td>https://github.com/eevans/services-adhoc-reports</td>
           </tr>
         </table>
-
-        <p class="notice">
-          <i>
-            Note: This (beta) report is currently being generated from an adhoc Git checkout in a user
-            home directory, and is executed by a manually configured cron job.  If accepted, this software
-            should be properly documented, deployed, and Puppetized (see
-            <a href="https://phabricator.wikimedia.org/T147366">Setup automated topk wide row reporting</a>
-            for more information).
-          </i>
-        </p>
       </body>
     </html>
     """
@@ -314,14 +304,20 @@ class EmailMessage(object):
             raise Exception("invalid message")
         self.message.attach(message)
 
+def write_csv(stream, results):
+    """
+    Writes the results in CSV format to the specified stream
+    """
+    csv_writer = csv.writer(stream)
+    for res in results:
+        csv_writer.writerow([res[0].encode("utf-8"), res[1]])
+
 def csv_attachement(results):
     """
     Return an email attachment of a csv file containing results.
     """
     csv_fp = StringIO.StringIO()
-    csv_writer = csv.writer(csv_fp)
-    for res in results:
-        csv_writer.writerow([res[0].encode("utf-8"), res[1]])
+    write_csv(csv_fp, results)
     csv_msg = MIMEText(csv_fp.getvalue(), "csv")
     csv_msg.add_header("Content-Disposition", "attachment", filename="report.csv")
     return csv_msg
@@ -351,13 +347,58 @@ def strfsize(num, suffix='B'):
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
+def pretty_print(values):
+    """
+    Writes the report as a pretty-formatted list on stdout
+    """
+    header = ['Size', 'Partition', 'Size (in bytes)']
+    size = [len(x) for x in header]
+    results = []
+    # format the values and find out the largest element in each column
+    for val in values:
+        tup = (strfsize(val[1]), val[0], str(val[1]))
+        for idx, slen in enumerate(size):
+            if len(tup[idx]) > slen:
+                size[idx] = len(tup[idx])
+        results.append(tup)
+    results.insert(0, header)
+    # adjust the width of each cell
+    results = [[res[idx].ljust(s) for idx, s in enumerate(size)] for res in results]
+    # print it out
+    for res in results:
+        sys.stdout.write('%s  %s  %s\n' % (res[0], res[1], res[2]))
+
+def send_email(values, args, count, exec_start_time):
+    """
+    Create and send the report in an e-mail
+    """
+    print "Sending email report..."
+    # Craft an html email message report.
+    email = EmailMessage(
+        results=[(i[0], strfsize(i[1])) for i in values[:args.top]],
+        subject=subject(args.last_days),
+        email_address=args.email,
+        message_from="{}@{}".format(getpass.getuser(), local_hostname()),
+        cluster_name=args.cluster,
+        logstash_host=args.logstash_host,
+        execution_host=local_hostname(),
+        execution_time=time.time()-exec_start_time,
+        total_query_results=count,
+        unique_query_results=len(values)
+    )
+    email.attach(csv_attachement(values[:args.top]))    # Attach a csv file.
+    email.send()                                        # Deliver.
+    print "Done."
+
 def parse_arguments():
     """
     Parse command-line arguments.
     """
     parser = argparse.ArgumentParser(
         description="Generate an email report of the widest Cassandra partitions.")
-    parser.add_argument("-e", "--email", metavar="ADDRESS", required=True, help="Email address to send report to")
+    parser.add_argument("-e", "--email", metavar="ADDRESS", default='', help="Email the report to the specified address")
+    parser.add_argument('-s', '--csv', action='store_true', help='Output a comma-delimited report to stdout')
+    parser.add_argument('-t', '--printed', action='store_true', help='Output a pretty-formatted report to stdout')
     parser.add_argument(
         "-H", "--logstash-host",
         metavar="HOST",
@@ -368,7 +409,11 @@ def parse_arguments():
     parser.add_argument("-c", "--cluster", metavar="NAME", default="eqiad", help="Cassandra cluster name")
     parser.add_argument(
         "-d", "--last-days", metavar="DAYS", default=7, type=int, help="Past number of days to report on")
-    return parser.parse_args()
+    ret = parser.parse_args()
+    if not (ret.csv or ret.printed or len(ret.email)):
+        sys.stderr.write('One of --email, --csv or --printed has to be supplied!\n')
+        sys.exit(2)
+    return ret
 
 def main():
     """
@@ -408,27 +453,16 @@ def main():
     # Sort results by partition size, descending.
     values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
 
-    print "Sending email report..."
-
-    # Craft an html email message report.
-    email = EmailMessage(
-        results=[(i[0], strfsize(i[1])) for i in values[:args.top]],
-        subject=subject(args.last_days),
-        email_address=args.email,
-        message_from="{}@{}".format(getpass.getuser(), local_hostname()),
-        cluster_name=args.cluster,
-        logstash_host=args.logstash_host,
-        execution_host=local_hostname(),
-        execution_time=time.time()-exec_start_time,
-        total_query_results=count,
-        unique_query_results=len(values)
-    )
-
-    email.attach(csv_attachement(values[:args.top]))    # Attach a csv file.
-    email.send()                                        # Deliver.
-
-    print "Done."
-
+    # decide on the action to perform
+    if len(args.email):
+        # send the e-mail
+        send_email(values, args, count, exec_start_time)
+    elif args.csv:
+        # print the CSV on stdout
+        write_csv(sys.stdout, values[:args.top])
+    elif args.printed:
+        # pretty-print the results
+        pretty_print(values[:args.top])
 
 if __name__ == "__main__":
     main()
