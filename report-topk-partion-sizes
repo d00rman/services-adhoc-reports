@@ -33,6 +33,7 @@ import StringIO
 import socket
 import sys
 import time
+import logging
 
 from email.mime.text      import MIMEText
 from email.mime.base      import MIMEBase
@@ -372,7 +373,7 @@ def send_email(values, args, count, exec_start_time):
     """
     Create and send the report in an e-mail
     """
-    print "Sending email report..."
+    logging.warning("Sending email report...")
     # Craft an html email message report.
     email = EmailMessage(
         results=[(i[0], strfsize(i[1])) for i in values[:args.top]],
@@ -388,7 +389,7 @@ def send_email(values, args, count, exec_start_time):
     )
     email.attach(csv_attachement(values[:args.top]))    # Attach a csv file.
     email.send()                                        # Deliver.
-    print "Done."
+    logging.warning("Done.")
 
 def parse_arguments():
     """
@@ -430,7 +431,7 @@ def main():
 
     # Query each daily logstash index, for the last N days.
     for index in index_names(args.last_days):
-        print "Querying elasticsearch index:", index
+        logging.warning("Querying elasticsearch index: %s" % index)
         try:
             # Collate the returned results.
             for hit in logstash.search(index, search_query(args.cluster)):
@@ -438,7 +439,7 @@ def main():
                 message = hit["_source"]["message"]
                 match = log_message_re.match(message)
                 if not match:
-                    print "Warning: result did not match regex (\"{}\")".format(message)
+                    logging.error("Result did not match regex (\"{}\")".format(message))
                     continue
                 partition = match.group("partition")
                 size = match.group("bytes")
@@ -448,7 +449,7 @@ def main():
         # (an elasticsearch setting; 10000 in our environment).  The solution seems to be to use the
         # scroll API instead (https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-scroll.html).
         except Exception, err:
-            print >>sys.stderr, "Query of index {} failed: {}".format(index, err)
+            logging.error("Query of index {} failed: {}".format(index, err))
 
     # Sort results by partition size, descending.
     values = sorted(results.items(), key=operator.itemgetter(1), reverse=True)
@@ -465,4 +466,5 @@ def main():
         pretty_print(values[:args.top])
 
 if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
     main()
