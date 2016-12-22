@@ -35,10 +35,10 @@ import sys
 import time
 import logging
 
-from email.mime.text      import MIMEText
-from email.mime.base      import MIMEBase
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
-from subprocess           import Popen, PIPE
+from subprocess import Popen, PIPE
 
 try:
     import jsonschema
@@ -87,6 +87,7 @@ class ElasticSearch(object):
             res = Page(requests.get(self.__url(index), data=json.dumps(query)))
             for hit in res.hits:
                 yield hit
+
 
 class Page(object):
     """
@@ -139,10 +140,13 @@ class Page(object):
         if not hasattr(response, "status_code"):
             raise Exception("invalid response object")
         if response.status_code != 200:
-            raise Exception("elasticsearch returned status {0.status_code}: {1}".format(response, response.json()))
+            raise Exception(
+                "elasticsearch returned status " +
+                "{0.status_code}: {1}".format(response, response.json()))
         json_obj = response.json()
         jsonschema.validate(json_obj, Page.response_schema)
         return json_obj
+
 
 def search_query(cluster="eqiad"):
     """
@@ -153,7 +157,9 @@ def search_query(cluster="eqiad"):
         "query": {
             "bool": {
                 "must": [
-                    {"match": {"logger_name": "org.apache.cassandra.io.sstable.format.big.BigTableWriter"}},
+                    {"match": {
+                        "logger_name": "org.apache.cassandra.io.sstable.format.big.BigTableWriter"
+                    }},
                     {"match": {"cluster": cluster}},
                     {"match_phrase": {"message": "Writing large partition"}}
                 ]
@@ -162,15 +168,18 @@ def search_query(cluster="eqiad"):
         "_source": ["message"]
     }
 
+
 def index_names(days=7):
     """
     Returns a generator of logstash index names for the past N days.
     """
-    name = lambda dt: dt.strftime("logstash-%Y.%m.%d")
+    def name(dt):
+        return dt.strftime("logstash-%Y.%m.%d")
     now = datetime.datetime.now()
     yield name(now)
     for i in range(days):
         yield name(now - datetime.timedelta(days=i+1))
+
 
 class EmailMessage(object):
     """
@@ -201,8 +210,8 @@ class EmailMessage(object):
           Respected Humans,
         </p>
         <p>
-          Attached is a report of the top {{results|length}} widest partitions for the Cassandra cluster named
-          <i>{{cluster_name}}</i>.
+          Attached is a report of the top {{results|length}} widest partitions for the Cassandra
+          cluster named <i>{{cluster_name}}</i>.
         </p>
 
         <table>
@@ -220,12 +229,13 @@ class EmailMessage(object):
 
         <h2>About this report:</h2>
         <p>
-          Cassandra logs a warning whenever background compaction encounters a parition larger than the value of
-          <a href="http://cassandra.apache.org/doc/latest/configuration/cassandra_config_file.html#compaction-large-partition-warning-threshold-mb">
+          Cassandra logs a warning whenever background compaction encounters a parition larger
+          than the value of
+          <a href="http://cassandra.apache.org/doc/latest/configuration/cassandra_config_file.html">
             <code>compaction_large_partition_warning_threshold_mb</code>
           </a>.
-          This report is periodically generated from an Elasticsearch query of these log messages, and emailed to
-          {{email_address}}.
+          This report is periodically generated from an Elasticsearch query of these log messages,
+          and emailed to {{email_address}}.
         </p>
 
         <table>
@@ -294,7 +304,9 @@ class EmailMessage(object):
         """
         Deliver this report.
         """
-        proc = Popen(["/usr/sbin/exim4", "-i", self.message["To"]], stdout=PIPE, stdin=PIPE, stderr=PIPE)
+        proc = Popen(
+            ["/usr/sbin/exim4", "-i", self.message["To"]],
+            stdout=PIPE, stdin=PIPE, stderr=PIPE)
         proc.communicate(input=self.message.as_string())
 
     def attach(self, message):
@@ -305,6 +317,7 @@ class EmailMessage(object):
             raise Exception("invalid message")
         self.message.attach(message)
 
+
 def write_csv(stream, results):
     """
     Writes the results in CSV format to the specified stream
@@ -312,6 +325,7 @@ def write_csv(stream, results):
     csv_writer = csv.writer(stream)
     for res in results:
         csv_writer.writerow([res[0].encode("utf-8"), res[1]])
+
 
 def csv_attachement(results):
     """
@@ -323,11 +337,13 @@ def csv_attachement(results):
     csv_msg.add_header("Content-Disposition", "attachment", filename="report.csv")
     return csv_msg
 
+
 def local_hostname():
     """
     Returns the fully-qualified hostname of this current machine.
     """
     return socket.gethostbyaddr(socket.gethostname())[0]
+
 
 def subject(days):
     """
@@ -338,6 +354,7 @@ def subject(days):
     date_from = (now - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
     return "Cassandra wide partition report: period of {} to {}".format(date_from, date_to)
 
+
 def strfsize(num, suffix='B'):
     """
     Formats a size as a human-readable string.
@@ -347,6 +364,7 @@ def strfsize(num, suffix='B'):
             return "%.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
+
 
 def pretty_print(values):
     """
@@ -368,6 +386,7 @@ def pretty_print(values):
     # print it out
     for res in results:
         sys.stdout.write('%s  %s  %s\n' % (res[0], res[1], res[2]))
+
 
 def send_email(values, args, count, exec_start_time):
     """
@@ -391,25 +410,38 @@ def send_email(values, args, count, exec_start_time):
     email.send()                                        # Deliver.
     logging.warning("Done.")
 
+
 def parse_arguments():
     """
     Parse command-line arguments.
     """
     parser = argparse.ArgumentParser(
         description="Generate an email report of the widest Cassandra partitions.")
-    parser.add_argument("-e", "--email", metavar="ADDRESS", default='', help="Email the report to the specified address")
-    parser.add_argument('-s', '--csv', action='store_true', help='Output a comma-delimited report to stdout')
+    parser.add_argument(
+        "-e", "--email", metavar="ADDRESS", default='',
+        help="Email the report to the specified address")
+    parser.add_argument(
+        '-s', '--csv', action='store_true',
+        help='Output a comma-delimited report to stdout')
     parser.add_argument(
         "-H", "--logstash-host",
         metavar="HOST",
         default="logstash1001.eqiad.wmnet",
         help="Logstash hostname or address to search")
-    parser.add_argument("-p", "--logstash-port", metavar="PORT", type=int, default=9200, help="Logstash port number")
-    parser.add_argument("-k", "--top", metavar="N", type=int, default=50, help="Number of results to report")
-    parser.add_argument("-c", "--cluster", metavar="NAME", default="eqiad", help="Cassandra cluster name")
     parser.add_argument(
-        "-d", "--last-days", metavar="DAYS", default=7, type=int, help="Past number of days to report on")
+        "-p", "--logstash-port", metavar="PORT", type=int, default=9200,
+        help="Logstash port number")
+    parser.add_argument(
+        "-k", "--top", metavar="N", type=int, default=50,
+        help="Number of results to report")
+    parser.add_argument(
+        "-c", "--cluster", metavar="NAME", default="eqiad",
+        help="Cassandra cluster name")
+    parser.add_argument(
+        "-d", "--last-days", metavar="DAYS", default=7, type=int,
+        help="Past number of days to report on")
     return parser.parse_args()
+
 
 def main():
     """
@@ -421,7 +453,8 @@ def main():
     args = parse_arguments()
     count = 0
     results = {}
-    log_message_re = re.compile(r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
+    log_message_re = re.compile(
+        r"Writing large partition (?P<partition>.+) \((?P<bytes>[\d]+) bytes\)")
     logstash = ElasticSearch(args.logstash_host, args.logstash_port)
 
     # Query each daily logstash index, for the last N days.
@@ -442,7 +475,8 @@ def main():
                     results[partition] = int(size)
         # TODO: An exception is thrown when we page past `index.max_result_window` number of results
         # (an elasticsearch setting; 10000 in our environment).  The solution seems to be to use the
-        # scroll API instead (https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-scroll.html).
+        # scroll API instead
+        # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-scroll.html
         except Exception, err:
             logging.error("Query of index {} failed: {}".format(index, err))
 
@@ -459,6 +493,7 @@ def main():
     else:
         # pretty-print the results
         pretty_print(values[:args.top])
+
 
 if __name__ == "__main__":
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
